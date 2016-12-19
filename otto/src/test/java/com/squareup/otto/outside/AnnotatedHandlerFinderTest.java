@@ -36,7 +36,7 @@ import static org.fest.assertions.api.Assertions.assertThat;
 
 /**
  * Test that Bus finds the correct handlers.
- *
+ * <p>
  * This test must be outside the c.g.c.eventbus package to test correctly.
  *
  * @author Louis Wasserman
@@ -45,165 +45,179 @@ import static org.fest.assertions.api.Assertions.assertThat;
 @SuppressWarnings("UnusedDeclaration")
 public class AnnotatedHandlerFinderTest {
 
-  private static final Object EVENT = new Object();
+    private static final Object EVENT = new Object();
 
-  @Ignore // Tests are in extending classes.
-  public abstract static class AbstractEventBusTest<H> {
-    abstract H createHandler();
+    @Ignore // Tests are in extending classes.
+    public abstract static class AbstractEventBusTest<H> {
+        abstract H createHandler();
 
-    private H handler;
+        private H handler;
 
-    H getHandler() {
-      return handler;
+        H getHandler() {
+            return handler;
+        }
+
+        @Before
+        public void setUp() throws Exception {
+            handler = createHandler();
+            Bus bus = new Bus(ThreadEnforcer.ANY);
+            bus.register(handler);
+            bus.post(EVENT);
+        }
+
+        @After
+        public void tearDown() throws Exception {
+            handler = null;
+        }
     }
 
-    @Before
-    public void setUp() throws Exception {
-      handler = createHandler();
-      Bus bus = new Bus(ThreadEnforcer.ANY);
-      bus.register(handler);
-      bus.post(EVENT);
+    /*
+     * We break the tests up based on whether they are annotated or abstract in the superclass.
+     */
+    public static class BaseHandlerFinderTest
+            extends AbstractEventBusTest<BaseHandlerFinderTest.Handler> {
+        static class Handler {
+            final List<Object> nonSubscriberEvents = new ArrayList<Object>();
+            final List<Object> subscriberEvents = new ArrayList<Object>();
+
+            public void notASubscriber(Object o) {
+                nonSubscriberEvents.add(o);
+            }
+
+            @Subscribe
+            public void subscriber(Object o) {
+                subscriberEvents.add(o);
+            }
+        }
+
+        @Test
+        public void nonSubscriber() {
+            assertThat(getHandler().nonSubscriberEvents).isEmpty();
+        }
+
+        @Test
+        public void subscriber() {
+            assertThat(getHandler().subscriberEvents).containsExactly(EVENT);
+        }
+
+        @Override
+        Handler createHandler() {
+            return new Handler();
+        }
     }
 
-    @After
-    public void tearDown() throws Exception {
-      handler = null;
-    }
-  }
+    public static class AbstractNotAnnotatedInSuperclassTest
+            extends AbstractEventBusTest<AbstractNotAnnotatedInSuperclassTest.SubClass> {
+        abstract static class SuperClass {
+            public abstract void overriddenInSubclassNowhereAnnotated(Object o);
 
-  /*
-   * We break the tests up based on whether they are annotated or abstract in the superclass.
-   */
-  public static class BaseHandlerFinderTest
-      extends AbstractEventBusTest<BaseHandlerFinderTest.Handler> {
-    static class Handler {
-      final List<Object> nonSubscriberEvents = new ArrayList<Object>();
-      final List<Object> subscriberEvents = new ArrayList<Object>();
+            public abstract void overriddenAndAnnotatedInSubclass(Object o);
+        }
 
-      public void notASubscriber(Object o) {
-        nonSubscriberEvents.add(o);
-      }
+        static class SubClass extends SuperClass {
+            final List<Object> overriddenInSubclassNowhereAnnotatedEvents = new ArrayList<Object>();
+            final List<Object> overriddenAndAnnotatedInSubclassEvents = new ArrayList<Object>();
 
-      @Subscribe
-      public void subscriber(Object o) {
-        subscriberEvents.add(o);
-      }
-    }
+            @Override
+            public void overriddenInSubclassNowhereAnnotated(Object o) {
+                overriddenInSubclassNowhereAnnotatedEvents.add(o);
+            }
 
-    @Test public void nonSubscriber() {
-      assertThat(getHandler().nonSubscriberEvents).isEmpty();
-    }
+            @Subscribe
+            @Override
+            public void overriddenAndAnnotatedInSubclass(Object o) {
+                overriddenAndAnnotatedInSubclassEvents.add(o);
+            }
+        }
 
-    @Test public void subscriber() {
-      assertThat(getHandler().subscriberEvents).containsExactly(EVENT);
-    }
+        @Test
+        public void overriddenAndAnnotatedInSubclass() {
+            assertThat(getHandler().overriddenAndAnnotatedInSubclassEvents).containsExactly(EVENT);
+        }
 
-    @Override Handler createHandler() {
-      return new Handler();
-    }
-  }
+        @Test
+        public void overriddenInSubclassNowhereAnnotated() {
+            assertThat(getHandler().overriddenInSubclassNowhereAnnotatedEvents).isEmpty();
+        }
 
-  public static class AbstractNotAnnotatedInSuperclassTest
-      extends AbstractEventBusTest<AbstractNotAnnotatedInSuperclassTest.SubClass> {
-    abstract static class SuperClass {
-      public abstract void overriddenInSubclassNowhereAnnotated(Object o);
-
-      public abstract void overriddenAndAnnotatedInSubclass(Object o);
+        @Override
+        SubClass createHandler() {
+            return new SubClass();
+        }
     }
 
-    static class SubClass extends SuperClass {
-      final List<Object> overriddenInSubclassNowhereAnnotatedEvents = new ArrayList<Object>();
-      final List<Object> overriddenAndAnnotatedInSubclassEvents = new ArrayList<Object>();
+    public static class NeitherAbstractNorAnnotatedInSuperclassTest
+            extends AbstractEventBusTest<NeitherAbstractNorAnnotatedInSuperclassTest.SubClass> {
+        static class SuperClass {
+            final List<Object> neitherOverriddenNorAnnotatedEvents = new ArrayList<Object>();
+            final List<Object> overriddenInSubclassNowhereAnnotatedEvents = new ArrayList<Object>();
+            final List<Object> overriddenAndAnnotatedInSubclassEvents = new ArrayList<Object>();
 
-      @Override
-      public void overriddenInSubclassNowhereAnnotated(Object o) {
-        overriddenInSubclassNowhereAnnotatedEvents.add(o);
-      }
+            public void neitherOverriddenNorAnnotated(Object o) {
+                neitherOverriddenNorAnnotatedEvents.add(o);
+            }
 
-      @Subscribe @Override
-      public void overriddenAndAnnotatedInSubclass(Object o) {
-        overriddenAndAnnotatedInSubclassEvents.add(o);
-      }
+            public void overriddenInSubclassNowhereAnnotated(Object o) {
+                overriddenInSubclassNowhereAnnotatedEvents.add(o);
+            }
+
+            public void overriddenAndAnnotatedInSubclass(Object o) {
+                overriddenAndAnnotatedInSubclassEvents.add(o);
+            }
+        }
+
+        static class SubClass extends SuperClass {
+            @Override
+            public void overriddenInSubclassNowhereAnnotated(Object o) {
+                super.overriddenInSubclassNowhereAnnotated(o);
+            }
+
+            @Subscribe
+            @Override
+            public void overriddenAndAnnotatedInSubclass(Object o) {
+                super.overriddenAndAnnotatedInSubclass(o);
+            }
+        }
+
+        @Test
+        public void neitherOverriddenNorAnnotated() {
+            assertThat(getHandler().neitherOverriddenNorAnnotatedEvents).isEmpty();
+        }
+
+        @Test
+        public void overriddenInSubclassNowhereAnnotated() {
+            assertThat(getHandler().overriddenInSubclassNowhereAnnotatedEvents).isEmpty();
+        }
+
+        @Test
+        public void overriddenAndAnnotatedInSubclass() {
+            assertThat(getHandler().overriddenAndAnnotatedInSubclassEvents).containsExactly(EVENT);
+        }
+
+        @Override
+        SubClass createHandler() {
+            return new SubClass();
+        }
     }
 
-    @Test public void overriddenAndAnnotatedInSubclass() {
-      assertThat(getHandler().overriddenAndAnnotatedInSubclassEvents).containsExactly(EVENT);
+    public static class FailsOnInterfaceSubscription {
+
+        static class InterfaceSubscriber {
+            @Subscribe
+            public void whatever(Serializable thingy) {
+                // Do nothing.
+            }
+        }
+
+        @Test
+        public void subscribingToInterfacesFails() {
+            try {
+                new Bus(ThreadEnforcer.ANY).register(new InterfaceSubscriber());
+                fail("Annotation finder allowed subscription to illegal interface type.");
+            } catch (IllegalArgumentException expected) {
+                // Do nothing.
+            }
+        }
     }
-
-    @Test public void overriddenInSubclassNowhereAnnotated() {
-      assertThat(getHandler().overriddenInSubclassNowhereAnnotatedEvents).isEmpty();
-    }
-
-    @Override SubClass createHandler() {
-      return new SubClass();
-    }
-  }
-
-  public static class NeitherAbstractNorAnnotatedInSuperclassTest
-      extends AbstractEventBusTest<NeitherAbstractNorAnnotatedInSuperclassTest.SubClass> {
-    static class SuperClass {
-      final List<Object> neitherOverriddenNorAnnotatedEvents = new ArrayList<Object>();
-      final List<Object> overriddenInSubclassNowhereAnnotatedEvents = new ArrayList<Object>();
-      final List<Object> overriddenAndAnnotatedInSubclassEvents = new ArrayList<Object>();
-
-      public void neitherOverriddenNorAnnotated(Object o) {
-        neitherOverriddenNorAnnotatedEvents.add(o);
-      }
-
-      public void overriddenInSubclassNowhereAnnotated(Object o) {
-        overriddenInSubclassNowhereAnnotatedEvents.add(o);
-      }
-
-      public void overriddenAndAnnotatedInSubclass(Object o) {
-        overriddenAndAnnotatedInSubclassEvents.add(o);
-      }
-    }
-
-    static class SubClass extends SuperClass {
-      @Override
-      public void overriddenInSubclassNowhereAnnotated(Object o) {
-        super.overriddenInSubclassNowhereAnnotated(o);
-      }
-
-      @Subscribe @Override
-      public void overriddenAndAnnotatedInSubclass(Object o) {
-        super.overriddenAndAnnotatedInSubclass(o);
-      }
-    }
-
-    @Test public void neitherOverriddenNorAnnotated() {
-      assertThat(getHandler().neitherOverriddenNorAnnotatedEvents).isEmpty();
-    }
-
-    @Test public void overriddenInSubclassNowhereAnnotated() {
-      assertThat(getHandler().overriddenInSubclassNowhereAnnotatedEvents).isEmpty();
-    }
-
-    @Test public void overriddenAndAnnotatedInSubclass() {
-      assertThat(getHandler().overriddenAndAnnotatedInSubclassEvents).containsExactly(EVENT);
-    }
-
-    @Override SubClass createHandler() {
-      return new SubClass();
-    }
-  }
-
-  public static class FailsOnInterfaceSubscription {
-
-    static class InterfaceSubscriber {
-      @Subscribe public void whatever(Serializable thingy) {
-        // Do nothing.
-      }
-    }
-
-    @Test public void subscribingToInterfacesFails() {
-      try {
-        new Bus(ThreadEnforcer.ANY).register(new InterfaceSubscriber());
-        fail("Annotation finder allowed subscription to illegal interface type.");
-      } catch (IllegalArgumentException expected) {
-        // Do nothing.
-      }
-    }
-  }
 
 }
